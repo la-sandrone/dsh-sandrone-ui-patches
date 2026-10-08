@@ -1,5 +1,5 @@
 // dsh-sandrone-ui-patches（桑多涅的 UI 补丁，client 半区）：factory 期注入全局 CSS。
-// 覆盖五件事：① 衬线字体方案（:root 基线 + 皮肤 body 克隆免疫）；② 字号基准（正文 22px / 代码块 16px）；
+// 覆盖五件事：① 衬线字体方案（:root 基线 + 皮肤 body 克隆免疫）；② 字号倍率（基准交还 ui-theme，各档按倍率跟随）；
 // ③ 超长 markdown 表格强制压缩；④ 暗色皮肤表格分割线对比度；⑤ crumb 限宽放开（标题集群居中已于 2026-09-27 撤销）。
 // Pattern copied from dsh-client-ui-skin-center/lib/client.js (factory-time CSS injection).
 // NOTE: the client module loader applies every entry as a cordis plugin, so the
@@ -13,23 +13,43 @@ window.__ModuleLoader__.load({
 		var exports = module.exports;
 
 		// 字体栈单一权威源：:root 基线与 html body 克隆免疫块共用——改字体只动这两行常量。
-		var SERIF_FAMILY = "'Source Serif 4 Display', 'Source Serif 4', 'Times New Roman', '仿宋', 'FangSong','思源宋体', 'Noto Serif CJK SC', serif";
+		var SERIF_FAMILY = "'Source Serif 4 VF', 'Source Serif 4 Display', 'Source Serif 4', 'Times New Roman', '仿宋', 'FangSong','思源宋体', 'Noto Serif CJK SC', serif";
 		var CODE_FAMILY = "'Fira Code', '仿宋', 'FangSong', serif";
 
-		// ── 字号基准（2026-10-07 新增，与 VSCode 对齐）─────────────────────────
-		// CONTENT_SIZE 是 DSH 全部 markdown 字号的**唯一上游**：ui-theme 里
-		//   --dsh-content-font-delta: calc(var(--dsh-content-font-size, 14px) - 14px)
-		// 把 h1/h2/h3/h4/base/table 全写成 calc(<原字号> + delta) 的相对式，
-		// 所以改这一个变量就能整体缩放正文族。
-		// 但 code / code-block 是**硬编码绝对值**（12px / 11px），不参与 delta 链，
-		// 必须单独覆盖 —— 否则正文放大后代码显得更小，正是本次要修的问题。
-		var CONTENT_SIZE = "18px";
-		// 代码块 16px = 小四（12pt @96dpi）。行内代码取同值，避免 22px 行里嵌 11px 的断崖。
-		var CODE_SIZE = "16px";
-		var CODE_LINE = "26px";        // 16px × 1.625
-		var CODE_LINE_SMALL = "24px";
+		// ── 字号倍率（2026-10-08 改为比例式，与 VSCode 对齐）────────────────────────
+		// 唯一绝对数字交还 ui-theme 的 --dsh-content-font-size（设置面板「字号大小」）：
+		// 由 boot script 与 ui-layout 的 theme-presenter 写在 body 内联样式上。本包只留倍率。
+		// 倍率 = 2026-10-07 在 18px 基准下定稿的绝对 px ÷ 18 ⇒ 基准设 18 时与当时逐像素一致，
+		// 其它基准按「DPI 缩放」式等比跟随（乘法）。不用加法：复用官方 delta 时锚点在 14px，
+		// 22px 基准下代码块会算成 16 + 8 = 24px，比正文还大 —— 层级翻转。
+		// DSH 的 delta 链（h1/h2/h3/h4/base/table）是 calc(<原字号> + delta)，官方自管，本包不碰；
+		// code / code-block 是硬编码绝对值（12px / 11px），压根不跟随，故这几档由本包接管。
+		var CODE_RATIO = 0.8888888888888889;              // 16/18 —— 代码块与行内代码
+		var CODE_LINE_RATIO = 1.4444444444444444;        // 26/18
+		var CODE_LINE_SMALL_RATIO = 1.3333333333333333;  // 24/18
+		var BANNER_RATIO = 0.8333333333333333;           // 15/18 —— 代码块头部语言标签
+		var BANNER_LINE_RATIO = 1.2222222222222222;      // 22/18
 
 		var FONT_CSS = [
+			"/* ── 随包可变字体（Source Serif 4 Variable / Roman / woff2 全量 426,716 B）────────────",
+			"   由 host 半区 lib/index.js 的前缀路由提供。URL 前缀刻意含完整包名，便于公开导出脚本",
+			"   字面替换（/api/dsh-sandrone-ui-patches/fonts/ -> …/dsh-sandrone-ui-patches/fonts/）。",
+			"   为什么不走别的路：内嵌进 bundle 会让它 +570 KB；借皮肤 assets 是 no-store，417 KB",
+			"   每次页面加载重传；/plugins 只服务 client bundle。这条路由带 immutable 缓存与内容哈希",
+			"   ETag，是三害相权取其轻。",
+			"   ★ 全量、不子集化：本机场景是科幻 + 人类学讨论，数学符号 / 希腊字母 / IPA / 转写",
+			"     变音符都是高发字符。",
+			"   ★ 可变轴（wght 200-900、opsz 8-60）保留 ⇒ font-optical-sizing: auto 能按实际",
+			"     font-size 自动选光学尺寸。这正是「字号可调」这个设计成立的前提：手工分档是静态",
+			"     映射，字号一调就失配；opsz 轴是动态的。",
+			"   许可 SIL OFL 1.1（Adobe）；随包附 font/LICENSE-SourceSerif4.md。 */",
+			"@font-face {",
+			"  font-family: 'Source Serif 4 VF';",
+			"  src: url('/api/dsh-sandrone-ui-patches/fonts/source-serif-4-var-roman.woff2') format('woff2');",
+			"  font-weight: 200 900;",
+			"  font-style: normal;",
+			"  font-display: swap;",
+			"}",
 			":root {",
 			"  /* 正文族：西文 Source Serif 4（人文衬线/手写味）打头 -> Times New Roman（印刷感兜底） -> 中文仿宋（手写感） -> 思源宋体（印刷感兜底） */",
 			"  --dsw-font-family: " + SERIF_FAMILY + " !important;",
@@ -55,26 +75,30 @@ window.__ModuleLoader__.load({
 			"  --dsw-font-family: " + SERIF_FAMILY + " !important;",
 			"  --ds-font-family-code: " + CODE_FAMILY + " !important;",
 			"}",
-			"/* ── 字号基准（2026-10-07 新增，与 VSCode 对齐）────────────────────────────",
-			"   ① 正文档：DSH 的 h1/h2/h3/h4/base/table 全是 calc(<原字号> + var(--dsh-content-font-delta))，",
-			"      而 delta = calc(var(--dsh-content-font-size,14px) - 14px)。改这一个变量，整个正文族等比放大。",
-			"   ② 代码档：code(12px) / code-block(11px) 是**硬编码绝对值**，不参与 delta 链，必须显式覆盖。",
-			"   ③ ★ 简写陷阱：--dsw-font-markdown-code-block 把字号**字面量内联**在值里",
-			"      （'11px/19px var(--ds-font-family-code)'），而 CodeCard / DiffBlock / SearchBlock /",
-			"      TerminalBlock / CodeBlock 共六处用 `font: var(--dsw-font-markdown-code-block)` 简写取值。",
-			"      CSS 变量是静态替换 —— 只改 -font-size 子变量**不会**重算简写变量，两者必须一起覆盖。",
-			"   ④ 双锚点：与字体变量同理，:root 基线 + html body 克隆免疫，防皮肤管线劫持。 */",
-			":root, html body {",
-			"  --dsh-content-font-size: " + CONTENT_SIZE + " !important;",
-			"  --dsw-font-markdown-code: " + CODE_SIZE + "/" + CODE_LINE + " var(--ds-font-family-code) !important;",
-			"  --dsw-font-markdown-code-font-size: " + CODE_SIZE + " !important;",
-			"  --dsw-font-markdown-code-line-height: " + CODE_LINE + " !important;",
-			"  --dsw-font-markdown-code-block: " + CODE_SIZE + "/" + CODE_LINE + " var(--ds-font-family-code) !important;",
-			"  --dsw-font-markdown-code-block-font-size: " + CODE_SIZE + " !important;",
-			"  --dsw-font-markdown-code-block-line-height: " + CODE_LINE + " !important;",
-			"  --dsw-font-markdown-code-block-small: " + CODE_SIZE + "/" + CODE_LINE_SMALL + " var(--ds-font-family-code) !important;",
-			"  --dsw-font-markdown-code-block-small-font-size: " + CODE_SIZE + " !important;",
-			"  --dsw-font-markdown-code-block-small-line-height: " + CODE_LINE_SMALL + " !important;",
+			"/* ── 字号倍率（2026-10-08 改比例式；基准交还 ui-theme）────────────────────",
+			"   ① 基准 --dsh-content-font-size 由 ui-theme 写在 body 内联（设置面板「字号大小」10..22），",
+			"      本包不再覆盖 —— 覆盖会以 !important 压过内联，让整个设置面板失效。",
+			"   ② 本包接管的档（官方 code 12px / code-block 11px / banner 11px 都是硬编码绝对值、",
+			"      不跟随 delta 链）改为「基准 × 固定倍率」，倍率见上方常量。",
+			"   ③ ★ 简写陷阱：--dsw-font-markdown-code-block 把字号**字面量内联**在值里，而 CodeCard /",
+			"      DiffBlock / SearchBlock / TerminalBlock / CodeBlock 六处用 `font: var(...)` 简写取值；",
+			"      CSS 变量是静态替换，只改 -font-size 子变量不会重算简写变量 —— 两者必须一起覆盖。",
+			"   ④ ★ 只挂 html body，不并挂 :root：:root 在 <html> 上解析，取不到只写在 body 上的基准值",
+			"      （会掉进 14px 兜底），且 :root 特异性 (0,1,0) 高于 html body (0,0,2)，挂错会反过来赢。",
+			"      它同时兼任「皮肤克隆免疫」：皮肤管线把 :root 自定义属性 clone 到 body，本块 !important",
+			"      压过无 !important 的克隆。 */",
+			"html body {",
+			"  /* 基准的本地别名（sgt 前缀避与官方/皮肤变量重名），供下面几条比例式复用。 */",
+			"  --sgt-content-size: var(--dsh-content-font-size, 14px);",
+			"  --dsw-font-markdown-code: calc(var(--sgt-content-size) * " + CODE_RATIO + ") / calc(var(--sgt-content-size) * " + CODE_LINE_RATIO + ") var(--ds-font-family-code) !important;",
+			"  --dsw-font-markdown-code-font-size: calc(var(--sgt-content-size) * " + CODE_RATIO + ") !important;",
+			"  --dsw-font-markdown-code-line-height: calc(var(--sgt-content-size) * " + CODE_LINE_RATIO + ") !important;",
+			"  --dsw-font-markdown-code-block: calc(var(--sgt-content-size) * " + CODE_RATIO + ") / calc(var(--sgt-content-size) * " + CODE_LINE_RATIO + ") var(--ds-font-family-code) !important;",
+			"  --dsw-font-markdown-code-block-font-size: calc(var(--sgt-content-size) * " + CODE_RATIO + ") !important;",
+			"  --dsw-font-markdown-code-block-line-height: calc(var(--sgt-content-size) * " + CODE_LINE_RATIO + ") !important;",
+			"  --dsw-font-markdown-code-block-small: calc(var(--sgt-content-size) * " + CODE_RATIO + ") / calc(var(--sgt-content-size) * " + CODE_LINE_SMALL_RATIO + ") var(--ds-font-family-code) !important;",
+			"  --dsw-font-markdown-code-block-small-font-size: calc(var(--sgt-content-size) * " + CODE_RATIO + ") !important;",
+			"  --dsw-font-markdown-code-block-small-line-height: calc(var(--sgt-content-size) * " + CODE_LINE_SMALL_RATIO + ") !important;",
 			"}",
 			"/* ── code/pre 字族的全局兜底与皮肤压制（2026-10-07）────────────────────────",
 			"   背景：变量层的覆盖（--ds-font-family-code）只能管到「用变量取值」的地方；",
@@ -109,11 +133,11 @@ window.__ModuleLoader__.load({
 			"   没有变量可改，只能上选择器。",
 			"   锚点：data-code-block-banner 由 CodeBlock.tsx 写死，稳定；",
 			"   类名形如 _language_<hash>_<n>，带 CSS Module 哈希，故用类名**子串**匹配抗哈希漂移。",
-			"   取 15px：与 16px 的代码正文略错开，页头文字不该与代码正文等重。 */",
+			"   取值：按基准比例（15/18），与代码正文同源 —— 页头文字不该与代码正文等重。 */",
 			"[data-code-block-banner] [class*=\"_language_\"],",
 			"[data-code-block-banner] [class*=\"_title_\"] {",
-			"  font-size: 15px !important;",
-			"  line-height: 22px !important;",
+			"  font-size: calc(var(--sgt-content-size, 14px) * " + BANNER_RATIO + ") !important;",
+			"  line-height: calc(var(--sgt-content-size, 14px) * " + BANNER_LINE_RATIO + ") !important;",
 			"}",
 			"html, body {",
 			"  -webkit-font-smoothing: antialiased !important;",

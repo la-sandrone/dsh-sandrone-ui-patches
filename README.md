@@ -11,8 +11,9 @@ DeepSeek Harness（DSH）的界面补丁集合 —— 以 **client 半区注入�
 
 | 补丁 | 内容 |
 |---|---|
-| **字体方案** | 正文字族 Source Serif 4 Display 打头 → Times New Roman / 中文仿宋 / 思源宋体兜底；<br>代码字族 **Fira Code → 仿宋 → serif**（与 VSCode 对齐） |
-| **字号基准** | 正文 **18px**（改 `--dsh-content-font-size` 一处，h1–h4 与正文族**等比跟随**）；<br>代码块 / 行内代码 **16px**（小四） |
+| **字体方案** | 正文字族 **Source Serif 4 Variable**（随包自带，`@font-face`）打头 → Source Serif 4 Display / Times New Roman / 中文仿宋 / 思源宋体兜底；<br>代码字族 **Fira Code → 仿宋 → serif**（与 VSCode 对齐） |
+| **字号倍率** | **不设死基准** —— 跟随 DSH 设置面板的「字号大小」（10–22px），正文基准由用户决定；<br>本补丁只定义**倍率**（代码 = 基准 × 16/18、行内代码同、小字号行高 × 24/18、横幅 × 15/18 等），基准一动整站等比跟随 |
+| **随包字体** | `font/SourceSerif4Variable-Roman.woff2`（全量 426,716 B，**SIL OFL 1.1**），由 host 半区的前缀路由发出（`immutable` 缓存 + 内容哈希 ETag）；<br>保留可变轴 `wght 200-900` / `opsz 8-60`，故 `font-optical-sizing: auto` 能**按实际字号自动选光学尺寸** |
 | **皮肤字族压制** | 两层通用规则压掉皮肤对 `code`/`pre` 的组件级直接声明（**不逐皮肤枚举**，新皮肤自动覆盖） |
 | **表格** | 宽 Markdown 表格（≥4 列）强制压缩；furina/navia 暗色皮肤表格分割线对比度增强 |
 | **长会话渲染剪枝** | `content-visibility: auto` —— 屏幕外消息跳过样式计算与布局（见下） |
@@ -21,10 +22,13 @@ DeepSeek Harness（DSH）的界面补丁集合 —— 以 **client 半区注入�
 
 字族与字号均通过覆盖 DSH 的 CSS 变量树实现；皮肤压制另需选择器层（见 `lib/client.js` 注释）。
 
-> **为什么代码字号要单独覆盖**：DSH 把 markdown 标题族全写成
-> `calc(<原字号> + var(--dsh-content-font-delta))`，改基准一处即整体缩放；
-> 但 `code`/`code-block` 是**硬编码绝对值**（12px / 11px），不参与该 delta 链——
-> 所以放大正文后代码反而显得更小，必须显式覆盖。详见 `lib/client.js` 内注释。
+> **关于官方的字号链，以及本补丁接管哪几档**：DSH 把 markdown 标题族写成
+> `calc(<原字号> + var(--dsh-content-font-delta))`（加法式，基准由 `--dsh-content-font-size` 派生）；
+> 而 `code` / `code-block` / 横幅是**硬编码绝对值**（12px / 11px / 11px），**不在这条链上**。
+> 本补丁**不动**官方的基准与 delta 链 —— 早期版本曾用 `18px !important` 覆盖基准值，
+> 那会压掉设置面板（`!important` 赢过写在 body 内联样式上的用户设置），**已撤销**；
+> 现在只在链外接管这几档，并统一写成**倍率 × 基准**的形式。详见 `lib/client.js` 内注释。
+> （可变字体的 `opsz` 轴也正因「基准可调」才必需：手工分档是静态映射，字号一变就失配。）
 
 ## 长会话渲染剪枝
 
@@ -58,7 +62,13 @@ pnpm add file:packages/dsh-sandrone-ui-patches
 
 ## 许可
 
-MIT。`bench/katex/` 为上游 [KaTeX](https://katex.org/) 的发行副本（MIT），
+MIT。
+
+随包字体 `font/SourceSerif4Variable-Roman.woff2` 是
+[Source Serif 4](https://github.com/adobe-fonts/source-serif)（Adobe）的发行副本，
+采用 **SIL Open Font License 1.1**；许可全文随包附于 `font/LICENSE-SourceSerif4.md`（OFL 要求随附）。
+
+`bench/katex/` 为上游 [KaTeX](https://katex.org/) 的发行副本（MIT），
 随本项目一并分发以便基准测试离线复现。
 
 其余文本内容采用CC BY-SA 4.0协议予以授权，条款参考 https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hans 。
@@ -67,4 +77,3 @@ MIT。`bench/katex/` 为上游 [KaTeX](https://katex.org/) 的发行副本（MIT
 
 本项目为第三方界面补丁，与 DeepSeek 官方无隶属关系。
 界面注入类补丁会随上游 UI 变更而失锚，**升级 DSH 后请复验**。
-
