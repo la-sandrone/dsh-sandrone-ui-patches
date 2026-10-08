@@ -14,7 +14,25 @@ window.__ModuleLoader__.load({
 
 		// 字体栈单一权威源：:root 基线与 html body 克隆免疫块共用——改字体只动这两行常量。
 		var SERIF_FAMILY = "'Source Serif 4 VF', 'Source Serif 4 Display', 'Source Serif 4', 'Times New Roman', '仿宋', 'FangSong','思源宋体', 'Noto Serif CJK SC', serif";
-		var CODE_FAMILY = "'Fira Code', '仿宋', 'FangSong', serif";
+		//var CODE_FAMILY = "'Fira Code', '仿宋', 'FangSong', serif";
+		//var SERIF_FAMILY = "'Source Serif 4 Display','Source Serif 4','仿宋', 'FangSong','思源宋体', 'Noto Serif CJK SC', serif";
+		var CODE_FAMILY = "'Fira Code', '仿宋', 'FangSong','思源宋体', 'Noto Serif CJK SC',monospace";
+		var SIDEBAR_FAMILY = "'思源宋体', 'Source Han Serif SC', 'Noto Serif CJK SC', 'Source Serif 4 Display', 'Times New Roman', serif";
+		// ── 侧栏字体简写 token 重算（2026-10-09 v2：修 font: 简写漏网）────────────
+		// ui-theme 把字族**烘进**了 --dsw-font-* 简写 token，例如
+		//   --dsw-font-xxs-12: 12px/18px var(--dsw-font-family);
+		// 而 CSS 自定义属性的 Computed value 是「specified value with variables
+		// substituted」（css-variables-1 的 --* propdef）⇒ 嵌套 var() 在**声明处**
+		// （:root / html body）就解析完了，之后按计算值继承。
+		// ⇒ 只重定义 --dsw-font-family 没用；必须把这些简写 token 本身在侧栏根上重算。
+		// 子变量 -font-style/-font-weight/-font-size/-line-height 只是数值与长度、
+		// 不含嵌套 var() ⇒ 继承干净，拿来重建简写就不必硬编码任何尺寸。
+		// 刻意只列这 27 个字族简写：代码族（--ds-font-family-code / --dsw-font-mono /
+		// --dsw-font-markdown-code*）一概不碰 —— 终端、代码块、git diff 的等宽必须原样。
+		var SIDEBAR_FONT_TOKENS = ["xl-24", "l-20", "m-18", "base-16", "base-strong-16", "s-14", "s-strong-14", "xs-13", "xs-strong-13", "xxs-12", "xxs-strong-12", "xxxs-11", "xxxs-strong-11", "markdown-h1", "markdown-h2", "markdown-h3", "markdown-h4", "markdown-base", "markdown-base-strong", "markdown-base-italic", "markdown-base-strong-italic", "markdown-table", "markdown-table-head", "markdown-small", "markdown-small-strong", "markdown-small-italic", "markdown-small-strong-italic"];
+		var REBAKE_SIDEBAR_FONTS = SIDEBAR_FONT_TOKENS.map(function (t) {
+			return "  --dsw-font-" + t + ": var(--dsw-font-" + t + "-font-style, normal) var(--dsw-font-" + t + "-font-weight, 400) var(--dsw-font-" + t + "-font-size)/var(--dsw-font-" + t + "-line-height) var(--dsw-font-family);";
+		}).join("\n");
 
 		// ── 字号倍率（2026-10-08 改为比例式，与 VSCode 对齐）────────────────────────
 		// 唯一绝对数字交还 ui-theme 的 --dsh-content-font-size（设置面板「字号大小」）：
@@ -74,6 +92,85 @@ window.__ModuleLoader__.load({
 			"html body {",
 			"  --dsw-font-family: " + SERIF_FAMILY + " !important;",
 			"  --ds-font-family-code: " + CODE_FAMILY + " !important;",
+			"}",
+			"/* ── 侧边栏字族：思源宋体一体（2026-10-09；v2 补 font: 简写漏网）──────────",
+			"   只管左右两栏的「铬件」，会话内容与正文一律不动。",
+			"   ① 属性层：font-family 从 body 继承 ⇒ 在侧栏根上写一条就覆盖整棵子树；刻意",
+			"      不写通配选择器（直系声明永远赢过继承，写 `*` 会反过来压过本包上面那条",
+			"      code,pre 的 CODE_FAMILY）。左栏（ui-sidebar / ui-workspace）的 CSS 里一个",
+			"      font-family / font: 简写都没有，纯靠继承 ⇒ 这一条就够。",
+			"   ② 变量层（v2 新增，漏网的根因）：右栏插件 dsh-better-sidebar 大量使用",
+			"      `font: var(--dsw-font-xxs-12)` 这类**简写 token**。font: 简写会把 token 里",
+			"      烘着的字族展开成**元素上的直系 font-family 声明** —— 继承压不过它，而那个",
+			"      变量又是在 :root 解析完的（见上面 SIDEBAR_FONT_TOKENS 注释）⇒ 文件浏览器",
+			"      目录树、编辑器 chrome、标签条统统落回仿宋。修法：用各 token 自己的子变量在",
+			"      侧栏根上重建简写。",
+			"   ③ 为什么必须换思源宋体：侧栏字号是上游写死的字面 px（Rows.module.css .title",
+			"      14 / .meta 12 / .time 10），不吃 --dsh-content-font-size。14px 下仿宋竖画",
+			"      = 0.035em x 14 x 1.5 ≈ 0.74 设备像素，永远画不出一个纯黑像素（实测墨像素",
+			"      均值 129/255、纯黑占比 0%），而同一行的西文有 1.9 设备像素 ⇒「西文显胖」。",
+			"      思源宋体 CJK 竖画 0.0675em → 1.42 设备像素，稳过线；且思源宋体的拉丁本来就是",
+			"      Frank Griesshammer 手笔的 Source Serif（name 表第 9 项自述），与正文同源，",
+			"      失配比 1.22x（仿宋 是 2.60x）。",
+			"   ④ 例外：右栏编辑器正文（dsh-better-sidebar 的 .editorBody，构建后类名形如",
+			"      <hash>_editorBody）是大字号细读区，保留原衬线栈；类名子串抗哈希漂移。它同时",
+			"      需要 token 重算（编辑器里 .editorMd 也是 font: 简写），所以它也在 ② 的选择器",
+			"      名单里，只是 --dsw-font-family 被下面第三条规则改回原栈。",
+			"   副作用：编辑器内可折叠的文件树 dock（.editorTreeDock，含在 editorBody 内）跟着",
+			"   保留旧栈 —— 它其实是铬件，要一并换就把它也加进 ②③ 的选择器即可。 */",
+			"[data-slot=\"sidebar\"],",
+			"[data-slot=\"rightbar\"],",
+			"[data-slot=\"rightbar\"] [class*=\"editorBody\"] {",
+			REBAKE_SIDEBAR_FONTS,
+			"}",
+			"[data-slot=\"sidebar\"],",
+			"[data-slot=\"rightbar\"] {",
+			"  --dsw-font-family: " + SIDEBAR_FAMILY + " !important;",
+			"  font-family: " + SIDEBAR_FAMILY + " !important;",
+			"}",
+			"[data-slot=\"rightbar\"] [class*=\"editorBody\"] {",
+			"  --dsw-font-family: " + SERIF_FAMILY + " !important;",
+			"  font-family: " + SERIF_FAMILY + " !important;",
+			"}",
+			"/* ── 会话「编辑日志」卡（ui-deliverables / ChangedFiles）：只抬字号（2026-10-09）──",
+			"   锚点 data-changed-files=\"true\" 是插件自己写的**稳定属性**（非 CSS Module 哈希）；",
+			"   卡内类名构建后是 <hash>_<local>（lightningcss），故用 [class*=\"_local\"] 子串匹配，",
+			"   同时兼容 <local>_<hash>_<n>。属性选择器默认区分大小写 ⇒ [class*=\"_path\"] 不会误伤",
+			"   _previewPath。",
+			"   ★ 字族**刻意不动**（原本写过一版思源宋体兜底，已撤）：实测只要把字号拉上来，",
+			"     仿宋 × Source Serif 4 混排毫不违和 —— 「违和」的根因自始至终是**字号低于渲染",
+			"     地板、把仿宋压成灰**，不是两个字体不搭。上游字族原样保留：.path 读",
+			"     --dsw-font-family、.title/.toggle 走 .header{font:inherit} 继承、",
+			"     .row/.statCounts 走等宽 --ds-font-family-code（那是 +N/-N 对齐用的，别碰）。",
+			"     （对比：左右两栏在更上面那两块里确实换了字族 —— 那是因为侧栏字号被布局锁死在",
+			"       14px 且行高只有 32px，抬不动；这里抬得动，就不动字族。）",
+			"   ★ 字号：上游把这五处写成字面 px（title 13 / stat 10 / row 11 / path 12 / toggle 12），",
+			"     既不跟 --dsh-content-font-size，也不跟本包的倍率 ⇒ 正文设 20px 时它们仍只有",
+			"     10~13px，远低于渲染地板（仿宋竖画仅 0.035em ⇒ 12px 下约 0.5 CSS px、必是灰的）。",
+			"     改成「基准 x 倍率」，倍率按「基准 20px 时小字 >= 16px」反推，标题留在同一条乘法",
+			"     链上以保住层级： title 0.90 / path 0.85 / toggle 0.85 / row 0.80 / stat 0.80",
+			"     ⇒ 基准 20px 时 = 18 / 17 / 17 / 16 / 16px。是纯乘法式、无硬下限。",
+			"   ★ .header 原本 height:60px 是照 13px 标题定的，字号上抬后会裁切 ⇒ 放开为 auto。 */",
+			"[data-changed-files=\"true\"] [class*=\"_header\"] {",
+			"  height: auto !important;",
+			"  min-height: 60px;",
+			"}",
+			"[data-changed-files=\"true\"] [class*=\"_title\"] {",
+			"  font-size: calc(var(--sgt-content-size, 14px) * 0.9) !important;",
+			"  line-height: calc(var(--sgt-content-size, 14px) * 1.3) !important;",
+			"}",
+			"[data-changed-files=\"true\"] [class*=\"_path\"],",
+			"[data-changed-files=\"true\"] [class*=\"_toggle\"] {",
+			"  font-size: calc(var(--sgt-content-size, 14px) * 0.85) !important;",
+			"  line-height: calc(var(--sgt-content-size, 14px) * 1.25) !important;",
+			"}",
+			"[data-changed-files=\"true\"] [class*=\"_row\"] {",
+			"  font-size: calc(var(--sgt-content-size, 14px) * 0.8) !important;",
+			"  line-height: calc(var(--sgt-content-size, 14px) * 1.25) !important;",
+			"}",
+			"[data-changed-files=\"true\"] [class*=\"_stat\"] {",
+			"  font-size: calc(var(--sgt-content-size, 14px) * 0.8) !important;",
+			"  line-height: calc(var(--sgt-content-size, 14px) * 1.2) !important;",
 			"}",
 			"/* ── 字号倍率（2026-10-08 改比例式；基准交还 ui-theme）────────────────────",
 			"   ① 基准 --dsh-content-font-size 由 ui-theme 写在 body 内联（设置面板「字号大小」10..22），",
